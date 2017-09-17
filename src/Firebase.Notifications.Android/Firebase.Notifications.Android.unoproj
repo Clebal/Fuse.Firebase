@@ -25,6 +25,8 @@
 
     "Android/Impl.uno:Source",
     "Android/Impl.cpp.uxl:Extensions",
+
+    "Android/BigPictureStyleHttp.java:Java:android",
     "Android/PushNotificationReceiver.java:Java:android",
     "Android/PushNotificationIDService.java:Java:android",
     "Android/Assets/DefaultIcon.png:File"

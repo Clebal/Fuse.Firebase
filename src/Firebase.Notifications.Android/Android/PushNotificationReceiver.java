@@ -23,6 +23,10 @@ import com.google.firebase.messaging.RemoteMessage;
 import org.json.JSONObject;
 import org.json.JSONException;
 
+import com.fuse.firebase.Notifications.BigPictureStyleHttp;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+
 public class PushNotificationReceiver extends FirebaseMessagingService
 {
     public static ArrayList<RemoteMessage> _cachedBundles = new ArrayList<RemoteMessage>();
@@ -186,6 +190,15 @@ public class PushNotificationReceiver extends FirebaseMessagingService
         String body = map.get("body");
         String sound = map.get("sound");
         String icon = map.get("icon");
+
+        final String BIGTEXTSTYLE = "bigtextstyle";
+  			final String BIGPICTURESTYLE = "bigpicturestyle";
+
+        String bigTitle = map.get("bigTitle");
+        String bigBody = map.get("bigBody");
+        String notificationStyle = map.get("notificationStyle");
+        String featuredImage = map.get("featuredImage");
+
         String jsonStr = ToJsonString(remoteMessage);
         Intent intent = new Intent(context, @(Activity.Package).@(Activity.Name).class);
 
@@ -193,24 +206,82 @@ public class PushNotificationReceiver extends FirebaseMessagingService
         intent.setAction(PushNotificationReceiver.ACTION);
         intent.putExtra(PushNotificationReceiver.EXTRA_KEY, jsonStr);
 
-        android.app.PendingIntent pendingIntent =
-            android.app.PendingIntent.getActivity(context, 0, intent, android.app.PendingIntent.FLAG_ONE_SHOT);
+        android.app.PendingIntent pendingIntent = android.app.PendingIntent.getActivity(context, 0, intent, android.app.PendingIntent.FLAG_ONE_SHOT);
 
 
+        android.app.NotificationManager notificationManager = (android.app.NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);
+        
         NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(context)
             .setSmallIcon(@(Activity.Package).R.mipmap.notif)
             .setContentTitle(title)
             .setContentText(body)
             .setAutoCancel(true)
-#if @(Project.Android.NotificationIcon.Color:IsSet)
-            .setColor((int)0x@(Project.Android.NotificationIcon.Color))
-#endif
             .setContentIntent(pendingIntent);
-
-        if (sound=="default")
-        {
+        
+        if (sound=="default"){
             android.net.Uri defaultSoundUri= RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
             notificationBuilder.setSound(defaultSoundUri);
+        }
+
+        int id = PushNotificationReceiver.nextID();
+
+        if(notificationStyle != null && !notificationStyle.isEmpty()){
+
+            if(notificationStyle == BIGTEXTSTYLE || notificationStyle.equals(BIGTEXTSTYLE)){
+
+                notificationBuilder.setStyle(new NotificationCompat.BigTextStyle()
+                    .bigText(bigBody)
+                    .setBigContentTitle(bigTitle));
+
+            }else if(notificationStyle == BIGPICTURESTYLE || notificationStyle.equals(BIGPICTURESTYLE)){
+
+                if(featuredImage.startsWith("http://") || featuredImage.startsWith("https://")){
+
+                    BigPictureStyleHttp bps = new BigPictureStyleHttp(notificationManager, id, notificationBuilder, bigTitle, bigBody, sound);
+                    bps.execute(featuredImage);
+                    return;
+                
+                }else{
+
+                    Bitmap bitmap = null;
+
+                    int iconResourceID = com.fuse.R.get(featuredImage);
+
+                    if (iconResourceID!=-1){
+
+                        bitmap = android.graphics.BitmapFactory.decodeResource(context.getResources(), iconResourceID);
+
+                    }else{
+
+                        String packageName = "@(Project.Name)";
+                        InputStream afs = com.fuse.firebase.BundleFiles.OpenBundledFile(context, packageName, featuredImage);
+
+                        if (afs != null){
+
+                            bitmap = android.graphics.BitmapFactory.decodeStream(afs);
+                            try{
+                                afs.close();
+                            }catch (IOException e){
+                                Log.d(packageName, "Could close the notification image '" + featuredImage);
+                                e.printStackTrace();
+                                return;
+                            }
+
+                        }else{
+                            Log.d(packageName, "Could not the load image '" + featuredImage + "' as either a bundled file or android resource");
+                        }
+
+                    }
+
+                    notificationBuilder.setStyle(new NotificationCompat.BigPictureStyle()
+                        .bigPicture(bitmap)
+                        .setBigContentTitle(bigTitle)
+                        .setSummaryText(bigBody));
+                        
+                }
+
+            }
+
         }
 
         if (icon != null && !icon.isEmpty())
@@ -247,14 +318,12 @@ public class PushNotificationReceiver extends FirebaseMessagingService
             }
         }
 
-        android.app.NotificationManager notificationManager = (android.app.NotificationManager)context.getSystemService(Context.NOTIFICATION_SERVICE);
         Notification n = notificationBuilder.build();
+        
         if (sound!="")
             n.defaults |= Notification.DEFAULT_SOUND;
         n.defaults |= Notification.DEFAULT_LIGHTS;
         n.defaults |= Notification.DEFAULT_VIBRATE;
-
-        int id = PushNotificationReceiver.nextID();
 
         notificationManager.notify(id, n);
     }
